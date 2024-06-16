@@ -87,6 +87,11 @@ publishing {
 }
 
 jreleaser {
+    release {
+        github {
+            skipRelease = true
+        }
+    }
     signing {
         active = Active.ALWAYS
         armored = true
