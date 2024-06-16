@@ -1,4 +1,4 @@
-[![Maven Central](https://maven-badges.herokuapp.com/maven-central/io.github.froks/dlt-core/badge.svg)](https://central.sonatype.com/artifact/io.github.froks/dlt-core)
+[![Maven Central](https://img.shields.io/maven-central/v/io.github.froks/dlt-core)](https://central.sonatype.com/artifact/io.github.froks/dlt-core)
 
 
 # dlt-core
@@ -9,7 +9,7 @@ It currently only supports dlt version 1.
 
 Usage:
 
-Add `io.github.froks:dlt-core:<version>` to your dependencies.
+Add `io.github.froks:dlt-core:<version>` to your dependencies - see [mavencentral](https://central.sonatype.com/artifact/io.github.froks/dlt-core) for snippets.
 
 Code:
 ```kotlin
