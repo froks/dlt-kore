@@ -10,7 +10,7 @@ class DltUtilsTest {
         assertEquals("123", 0x3031323300.toInt().asStringValue())
     }
 
-    @org.junit.jupiter.api.Test
+    @Test
     fun `test asIntValue`() {
         assertEquals(0x3031323334.toInt(), "1234".asIntValue())
         assertEquals(0x3031323300.toInt(), "123".asIntValue())
