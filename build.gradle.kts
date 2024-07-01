@@ -6,7 +6,7 @@ plugins {
     kotlin("jvm").version("2.0.0")
     `java-library`
     `maven-publish`
-    id("org.jreleaser") version "1.12.0"
+    id("org.jreleaser") version "1.13.1"
 }
 
 group = "io.github.froks"
