@@ -309,13 +309,14 @@ public class DltPayload(
             for (i in 0 until extendedHeader.noar) {
                 val arg = DltPayloadArgument.fromByteBuffer(bb, byteOrder)
                 len -= arg.totalLength
-                if (i > 0) {
-                    sb.append("; ")
+                if (arg.variableName != null) {
+                    sb.append(arg.variableName)
+                    sb.append(" = ")
                 }
                 sb.append(arg)
+                sb.append(" ")
+
             }
-//            val str = ByteArray(len)
-            //          bb.get(str)
             return@lazy sb.toString()
         }
     }
@@ -417,10 +418,40 @@ public abstract class DltPayloadArgument(
                     byteOrder
                 )
 
+                DltPayloadArgumentType.BOOL -> DltPayloadArgumentBool.fromByteBuffer(
+                    arTypeInfo,
+                    bb,
+                    byteOrder
+                )
+
                 else -> throw IllegalArgumentException("arg type is $argType")
             }
         }
     }
+}
+
+public class DltPayloadArgumentBool(
+    public val data: Boolean,
+    variableName: String?,
+) : DltPayloadArgument(DltPayloadArgumentType.BOOL, variableName) {
+    public companion object {
+        public fun fromByteBuffer(typeInfo: Int, bb: ByteBuffer, byteOrder: ByteOrder): DltPayloadArgumentBool {
+            bb.order(byteOrder)
+
+            val variableName = getVariableName(typeInfo, bb)
+            val lenInfo = typeInfo and TYPEINFO_MASK_TYLE
+            if (lenInfo != 1) {
+                throw UnsupportedOperationException("Unsupported length info $lenInfo")
+            }
+            return DltPayloadArgumentBool(bb.get() != 0x0.toByte(), variableName)
+        }
+    }
+
+    override val dataSize: Int
+        get() = 1
+
+    override fun toString(): String =
+        data.toString()
 }
 
 public class DltPayloadArgumentString(
@@ -468,7 +499,7 @@ public class DltPayloadArgumentRawData(
     variableName: String?
 ) : DltPayloadArgument(DltPayloadArgumentType.STRG, variableName) {
     override val dataSize: Int
-        get() = data.length + (variableName?.length?.plus(3) ?: 0)
+        get() = data.length
 
     override fun toString(): String =
         data
@@ -490,7 +521,7 @@ public class DltPayloadArgumentRawData(
 }
 
 public class DltPayloadArgumentNumber(
-    public val type: DltPayloadArgumentType,
+    type: DltPayloadArgumentType,
     public val number: Number,
     public val isUnsigned: Boolean,
     private val len: Int,
@@ -498,7 +529,7 @@ public class DltPayloadArgumentNumber(
 ) :
     DltPayloadArgument(type, variableName) {
     override val dataSize: Int
-        get() = len + (variableName?.length?.plus(3) ?: 0)
+        get() = len
 
     public companion object {
         public fun fromByteBuffer(
@@ -549,5 +580,9 @@ public class DltPayloadArgumentNumber(
             }
             return DltPayloadArgumentNumber(type, number, type == DltPayloadArgumentType.UINT, lenInBytes, variableName)
         }
+    }
+
+    override fun toString(): String {
+        return number.toString()
     }
 }

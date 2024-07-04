@@ -27,7 +27,7 @@ private const val OVERLAP = 10_000_000
 private class LargeFileBufferChooser(val path: Path) : AutoCloseable {
     private lateinit var currentBuffer: ByteBuffer
 
-    private val fileSize = path.fileSize();
+    private val fileSize = path.fileSize()
     private var fileChannel: FileChannel = FileChannel.open(path, StandardOpenOption.READ)
     private var absolutePosition = -1L
     private var bufferIndex = 0
