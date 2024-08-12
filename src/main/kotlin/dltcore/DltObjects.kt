@@ -1,7 +1,8 @@
 package dltcore
 
-import java.nio.ByteBuffer
-import java.nio.ByteOrder
+import library.BinaryInputStream
+import library.BinaryOutputStream
+import library.ByteOrder
 import java.nio.charset.Charset
 import java.time.Instant
 import kotlin.experimental.and
@@ -20,7 +21,7 @@ public enum class DltStorageVersion(public val magicValue: Int) {
 
 public interface DltMessage {
     public fun getVersion(): DltStorageVersion
-    public fun write(bb: ByteBuffer)
+    public fun write(bb: BinaryOutputStream)
 }
 
 public class DltMessageV1(
@@ -36,7 +37,7 @@ public class DltMessageV1(
         get() =
             extendedHeader?.messageTypeInfo
 
-    override fun write(bb: ByteBuffer) {
+    override fun write(bb: BinaryOutputStream) {
         storageHeader.write(bb)
         standardHeader.write(bb)
         extendedHeader?.write(bb)
@@ -44,18 +45,18 @@ public class DltMessageV1(
     }
 
     public companion object {
-        public fun fromByteBuffer(buffer: ByteBuffer): DltMessageV1 {
-            val storageHeader = DltStorageHeaderV1.fromByteBuffer(buffer)
-            val standardHeader = DltStandardHeaderV1.fromByteBuffer(buffer)
+        public fun read(bis: BinaryInputStream): DltMessageV1 {
+            val storageHeader = DltStorageHeaderV1.read(bis)
+            val standardHeader = DltStandardHeaderV1.read(bis)
             val extendedHeader =
                 if (standardHeader.useExtendedHeader)
-                    DltExtendedHeaderV1.fromByteBuffer(buffer)
+                    DltExtendedHeaderV1.read(bis)
                 else
                     null
             val payloadLength =
                 standardHeader.len.toInt() - standardHeader.totalLength - (extendedHeader?.totalLength ?: 0)
-            val payload = DltPayload.fromByteBuffer(
-                buffer,
+            val payload = DltPayload.read(
+                bis,
                 payloadLength,
                 standardHeader.mostSignificantByteFirst,
                 extendedHeader
@@ -73,14 +74,14 @@ public class DltStorageHeaderV1(
     public val ecuIdText: String
         get() = ecuId.asStringValue()
 
-    public fun write(bb: ByteBuffer) {
+    public fun write(bb: BinaryOutputStream) {
         bb.order(ByteOrder.BIG_ENDIAN)
-        bb.putInt(DltStorageVersion.V1.magicValue)
+        bb.writeInt(DltStorageVersion.V1.magicValue)
 
         bb.order(ByteOrder.LITTLE_ENDIAN)
-        bb.putInt((timestampEpochSeconds and 0xFFFFFFFF).toInt())
-        bb.putInt(timestampMicroseconds)
-        bb.putInt(ecuId)
+        bb.writeInt((timestampEpochSeconds and 0xFFFFFFFF).toInt())
+        bb.writeInt(timestampMicroseconds)
+        bb.writeInt(ecuId)
     }
 
     public val utcTimestamp: Instant by lazy {
@@ -88,13 +89,13 @@ public class DltStorageHeaderV1(
     }
 
     public companion object {
-        public fun fromByteBuffer(buffer: ByteBuffer): DltStorageHeaderV1 {
+        public fun read(buffer: BinaryInputStream): DltStorageHeaderV1 {
             // why is this little endian, when all other headers are big?
             buffer.order(ByteOrder.LITTLE_ENDIAN)
 
-            val timestampEpochSeconds = buffer.int.toUInt().toLong()
-            val timestampMicroseconds = buffer.int
-            val ecuId = buffer.int
+            val timestampEpochSeconds = buffer.readInt().toUInt().toLong()
+            val timestampMicroseconds = buffer.readInt()
+            val ecuId = buffer.readInt()
             return DltStorageHeaderV1(timestampEpochSeconds, timestampMicroseconds, ecuId)
         }
     }
@@ -108,20 +109,20 @@ public class DltStandardHeaderV1(
     public val sessionId: Int?,
     public val timestamp: UInt?,
 ) {
-    public fun write(bb: ByteBuffer) {
+    public fun write(bb: BinaryOutputStream) {
         // The Standard Header and the Extended Header shall be in big endian format (MSB first).
         bb.order(ByteOrder.BIG_ENDIAN)
-        bb.put(htyp)
-        bb.put(mcnt.toByte())
-        bb.putShort(len.toShort())
+        bb.writeByte(htyp)
+        bb.writeByte(mcnt.toByte())
+        bb.writeShort(len.toShort())
         if (ecuId != null) {
-            bb.putInt(ecuId)
+            bb.writeInt(ecuId)
         }
         if (sessionId != null) {
-            bb.putInt(sessionId)
+            bb.writeInt(sessionId)
         }
         if (timestamp != null) {
-            bb.putInt(timestamp.toInt())
+            bb.writeInt(timestamp.toInt())
         }
     }
 
@@ -159,17 +160,17 @@ public class DltStandardHeaderV1(
         public const val HEADER_TYPE_WSID: Byte = (1 shl 3).toByte() // with Session ID
         public const val HEADER_TYPE_WTMS: Byte = (1 shl 4).toByte() // with timestamp
 
-        public fun fromByteBuffer(buffer: ByteBuffer): DltStandardHeaderV1 {
+        public fun read(buffer: BinaryInputStream): DltStandardHeaderV1 {
             // The Standard Header and the Extended Header shall be in big endian format (MSB first).
             buffer.order(ByteOrder.BIG_ENDIAN)
 
-            val htyp = buffer.get()
-            val mcnt = buffer.get().toUByte()
-            val len = buffer.short.toUShort()
+            val htyp = buffer.readByte()
+            val mcnt = buffer.readByte().toUByte()
+            val len = buffer.readShort().toUShort()
 
-            val ecuId = if (htyp.and(HEADER_TYPE_WEID) > 0) buffer.int else null
-            val sid = if (htyp.and(HEADER_TYPE_WSID) > 0) buffer.int else null
-            val timestamp = if (htyp.and(HEADER_TYPE_WTMS) > 0) buffer.int.toUInt() else null
+            val ecuId = if (htyp.and(HEADER_TYPE_WEID) > 0) buffer.readInt() else null
+            val sid = if (htyp.and(HEADER_TYPE_WSID) > 0) buffer.readInt() else null
+            val timestamp = if (htyp.and(HEADER_TYPE_WTMS) > 0) buffer.readInt().toUInt() else null
 
             return DltStandardHeaderV1(htyp, mcnt, len, ecuId, sid, timestamp)
         }
@@ -239,13 +240,13 @@ public class DltExtendedHeaderV1(
     public val apid: Int, // application id
     public val ctid: Int, // context id
 ) {
-    public fun write(bb: ByteBuffer) {
+    public fun write(bb: BinaryOutputStream) {
         bb.order(ByteOrder.BIG_ENDIAN)
 
-        bb.put(msin)
-        bb.put(noar)
-        bb.putInt(apid)
-        bb.putInt(ctid)
+        bb.writeByte(msin)
+        bb.writeByte(noar)
+        bb.writeInt(apid)
+        bb.writeInt(ctid)
     }
 
     public val isVerbose: Boolean
@@ -274,14 +275,14 @@ public class DltExtendedHeaderV1(
         public const val MESSAGEINFO_MSTP: Byte = 0b1110.toByte() // message type
         public const val MESSAGEINFO_MTIN: Byte = 0xF0.toByte() // message type info
 
-        public fun fromByteBuffer(buffer: ByteBuffer): DltExtendedHeaderV1 {
+        public fun read(buffer: BinaryInputStream): DltExtendedHeaderV1 {
             // The Standard Header and the Extended Header shall be in big endian format (MSB first).
             buffer.order(ByteOrder.BIG_ENDIAN)
 
-            val msin = buffer.get()
-            val noar = buffer.get()
-            val apid = buffer.int
-            val ctid = buffer.int
+            val msin = buffer.readByte()
+            val noar = buffer.readByte()
+            val apid = buffer.readInt()
+            val ctid = buffer.readInt()
             return DltExtendedHeaderV1(msin, noar, apid, ctid)
         }
     }
@@ -295,19 +296,18 @@ public class DltPayload(
     private val byteOrder = if (mostSignificantByteFirst) ByteOrder.BIG_ENDIAN else ByteOrder.LITTLE_ENDIAN
 
     public val logMessage: String by lazy {
-        val bb = ByteBuffer.wrap(data)
+        val bb = BinaryInputStream.wrap(data)
         bb.order(byteOrder)
 
         if (extendedHeader?.isVerbose != true) {
-            bb.int
-            val msg = ByteArray(data.size - 4)
-            bb.get(msg)
+            bb.readInt()
+            val msg = bb.readArray(data.size - 4)
             return@lazy String(msg)
         } else {
             val sb = StringBuilder()
             var len = data.size
             for (i in 0 until extendedHeader.noar) {
-                val arg = DltPayloadArgument.fromByteBuffer(bb, byteOrder)
+                val arg = DltPayloadArgument.read(bb, byteOrder)
                 len -= arg.totalLength
                 if (arg.variableName != null) {
                     sb.append(arg.variableName)
@@ -321,7 +321,7 @@ public class DltPayload(
         }
     }
 
-    public fun write(bb: ByteBuffer) {
+    public fun write(bb: BinaryOutputStream) {
         bb.order(byteOrder)
 
         bb.put(data)
@@ -329,14 +329,13 @@ public class DltPayload(
 
 
     public companion object {
-        public fun fromByteBuffer(
-            bb: ByteBuffer,
+        public fun read(
+            bis: BinaryInputStream,
             len: Int,
             mostSignificantByteFirst: Boolean,
             extendedHeader: DltExtendedHeaderV1?
         ): DltPayload {
-            val data = ByteArray(len)
-            bb.get(data)
+            val data = bis.readArray(len)
             return DltPayload(data, mostSignificantByteFirst, extendedHeader)
         }
     }
@@ -380,45 +379,44 @@ public abstract class DltPayloadArgument(
         public const val TYPEINFO_MASK_TYLE: Int = 0x7
         public const val TYPEINFO_MASK_STRING_ENCODING: Int = 0x38000
 
-        public fun getVariableName(typeInfo: Int, bb: ByteBuffer): String? {
+        public fun getVariableName(typeInfo: Int, bb: BinaryInputStream): String? {
             if (typeInfo and TYPEINFO_VARI > 0) {
-                val len = bb.short.toUShort().toInt()
-                val nameArray = ByteArray(len)
-                bb.get(nameArray)
+                val len = bb.readShort().toUShort().toInt()
+                val nameArray = bb.readArray(len)
                 return String(nameArray, 0, len - 1, Charsets.US_ASCII)
             }
             return null
         }
 
-        public fun fromByteBuffer(bb: ByteBuffer, byteOrder: ByteOrder): DltPayloadArgument {
+        public fun read(bb: BinaryInputStream, byteOrder: ByteOrder): DltPayloadArgument {
             bb.order(ByteOrder.LITTLE_ENDIAN)
-            val arTypeInfo = bb.int
+            val arTypeInfo = bb.readInt()
             val argType = DltPayloadArgumentType.getByTypeInfo(arTypeInfo)
             return when (argType) {
-                DltPayloadArgumentType.STRG -> DltPayloadArgumentString.fromByteBuffer(arTypeInfo, bb, byteOrder)
-                DltPayloadArgumentType.RAWD -> DltPayloadArgumentRawData.fromByteBuffer(arTypeInfo, bb, byteOrder)
-                DltPayloadArgumentType.UINT -> DltPayloadArgumentNumber.fromByteBuffer(
+                DltPayloadArgumentType.STRG -> DltPayloadArgumentString.read(arTypeInfo, bb, byteOrder)
+                DltPayloadArgumentType.RAWD -> DltPayloadArgumentRawData.read(arTypeInfo, bb, byteOrder)
+                DltPayloadArgumentType.UINT -> DltPayloadArgumentNumber.read(
                     argType,
                     arTypeInfo,
                     bb,
                     byteOrder
                 )
 
-                DltPayloadArgumentType.SINT -> DltPayloadArgumentNumber.fromByteBuffer(
+                DltPayloadArgumentType.SINT -> DltPayloadArgumentNumber.read(
                     argType,
                     arTypeInfo,
                     bb,
                     byteOrder
                 )
 
-                DltPayloadArgumentType.FLOA -> DltPayloadArgumentNumber.fromByteBuffer(
+                DltPayloadArgumentType.FLOA -> DltPayloadArgumentNumber.read(
                     argType,
                     arTypeInfo,
                     bb,
                     byteOrder
                 )
 
-                DltPayloadArgumentType.BOOL -> DltPayloadArgumentBool.fromByteBuffer(
+                DltPayloadArgumentType.BOOL -> DltPayloadArgumentBool.read(
                     arTypeInfo,
                     bb,
                     byteOrder
@@ -435,7 +433,7 @@ public class DltPayloadArgumentBool(
     variableName: String?,
 ) : DltPayloadArgument(DltPayloadArgumentType.BOOL, variableName) {
     public companion object {
-        public fun fromByteBuffer(typeInfo: Int, bb: ByteBuffer, byteOrder: ByteOrder): DltPayloadArgumentBool {
+        public fun read(typeInfo: Int, bb: BinaryInputStream, byteOrder: ByteOrder): DltPayloadArgumentBool {
             bb.order(byteOrder)
 
             val variableName = getVariableName(typeInfo, bb)
@@ -443,7 +441,7 @@ public class DltPayloadArgumentBool(
             if (lenInfo != 1) {
                 throw UnsupportedOperationException("Unsupported length info $lenInfo")
             }
-            return DltPayloadArgumentBool(bb.get() != 0x0.toByte(), variableName)
+            return DltPayloadArgumentBool(bb.readByte() != 0x0.toByte(), variableName)
         }
     }
 
@@ -466,13 +464,12 @@ public class DltPayloadArgumentString(
         data
 
     public companion object {
-        public fun fromByteBuffer(typeInfo: Int, bb: ByteBuffer, byteOrder: ByteOrder): DltPayloadArgumentString {
+        public fun read(typeInfo: Int, bb: BinaryInputStream, byteOrder: ByteOrder): DltPayloadArgumentString {
             bb.order(byteOrder)
 
             val variableName = getVariableName(typeInfo, bb)
-            val len = bb.short.toUShort().toInt()
-            val data = ByteArray(len)
-            bb.get(data)
+            val len = bb.readShort().toUShort().toInt()
+            val data = bb.readArray(len)
             val charset = when (val encoding = (typeInfo and TYPEINFO_MASK_STRING_ENCODING) shr 15) {
                 0 -> Charsets.US_ASCII
                 1 -> Charsets.UTF_8
@@ -506,13 +503,12 @@ public class DltPayloadArgumentRawData(
 
     public companion object {
         @OptIn(ExperimentalStdlibApi::class)
-        public fun fromByteBuffer(typeInfo: Int, bb: ByteBuffer, byteOrder: ByteOrder): DltPayloadArgumentRawData {
+        public fun read(typeInfo: Int, bb: BinaryInputStream, byteOrder: ByteOrder): DltPayloadArgumentRawData {
             bb.order(byteOrder)
 
             val variableName = getVariableName(typeInfo, bb)
-            val len = bb.short.toUShort().toInt()
-            val data = ByteArray(len)
-            bb.get(data)
+            val len = bb.readShort().toUShort().toInt()
+            val data = bb.readArray(len)
 
             val s = data.toHexString(DltRawHexFormat)
             return DltPayloadArgumentRawData(s, variableName)
@@ -532,10 +528,10 @@ public class DltPayloadArgumentNumber(
         get() = len
 
     public companion object {
-        public fun fromByteBuffer(
+        public fun read(
             type: DltPayloadArgumentType,
             typeInfo: Int,
-            bb: ByteBuffer,
+            bb: BinaryInputStream,
             byteOrder: ByteOrder
         ): DltPayloadArgumentNumber {
             bb.order(byteOrder)
@@ -557,22 +553,22 @@ public class DltPayloadArgumentNumber(
             val number = when (type) {
                 DltPayloadArgumentType.FLOA -> when (lenInBytes) {
                     2 -> throw UnsupportedOperationException("Half precision floats aren't supported")
-                    4 -> Float.fromBits(bb.int)
-                    8 -> Double.fromBits(bb.long)
+                    4 -> Float.fromBits(bb.readInt())
+                    8 -> Double.fromBits(bb.readLong())
                     else -> throw UnsupportedOperationException("Unsupported float len $lenInfo")
                 }
 
                 DltPayloadArgumentType.SINT -> when (lenInBytes) {
-                    2 -> bb.short
-                    4 -> bb.int
-                    8 -> bb.long
+                    2 -> bb.readShort()
+                    4 -> bb.readInt()
+                    8 -> bb.readLong()
                     else -> throw UnsupportedOperationException("Unsupported sint len $lenInBytes")
                 }
 
                 DltPayloadArgumentType.UINT -> when (lenInBytes) {
-                    2 -> bb.short
-                    4 -> bb.int
-                    8 -> bb.long
+                    2 -> bb.readShort()
+                    4 -> bb.readInt()
+                    8 -> bb.readLong()
                     else -> throw UnsupportedOperationException("Unsupported uint len $lenInBytes")
                 }
 
