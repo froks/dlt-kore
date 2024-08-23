@@ -12,10 +12,18 @@ public enum class DltStorageVersion(public val magicValue: Int) {
     V1(0x444c5401),  // "DLT+0x01"
     V2(0x444c5402); // "DLT+0x02"
 
+    private val littleEndian = Integer.reverseBytes(magicValue)
+
     public companion object {
         public fun getByMagic(value: Int): DltStorageVersion =
             DltStorageVersion.entries.firstOrNull { it.magicValue == value }
                 ?: throw IllegalArgumentException("Unknown dlt-header magic ${value.toString(16)}")
+
+        public fun isValidMagic(value: Int, endian: ByteOrder): Boolean =
+            when (endian) {
+                ByteOrder.BIG_ENDIAN -> DltStorageVersion.entries.any { it.magicValue == value  }
+                ByteOrder.LITTLE_ENDIAN -> DltStorageVersion.entries.any { it.littleEndian == value }
+            }
     }
 }
 

@@ -15,12 +15,23 @@ public data class DltReadStatus(
     val errorCount: Long,
     val successCount: Long,
     val dltMessage: DltMessage?,
+    val error: Exception?,
 )
 
 private class DltMessageIterator(val buffer: BinaryInputStream, val totalSize: Long?) : Iterator<DltReadStatus> {
     private var index: Long = 0
     private var successCount: Long = 0
     private var errorCount: Long = 0
+
+    private fun findFirstValidMagic(): Int {
+        buffer.order(ByteOrder.BIG_ENDIAN)
+        var magic = 0
+        while (!DltStorageVersion.isValidMagic(magic, ByteOrder.BIG_ENDIAN)) {
+            magic = magic shl 8
+            magic = magic or (buffer.readByte().toInt() and 0xFF)
+        }
+        return magic
+    }
 
     private fun parseDltMessage(buffer: BinaryInputStream, version: DltStorageVersion): DltMessage =
         when (version) {
@@ -34,13 +45,14 @@ private class DltMessageIterator(val buffer: BinaryInputStream, val totalSize: L
     override fun next(): DltReadStatus {
         buffer.order(ByteOrder.BIG_ENDIAN)
         if (buffer.hasRemaining()) {
-            val message = try {
-                val magic = buffer.readInt()
+            val result = try {
+                val magic = findFirstValidMagic()
                 val version = DltStorageVersion.getByMagic(magic)
                 parseDltMessage(buffer, version)
             } catch (e: RuntimeException) {
                 errorCount++
-                throw RuntimeException(
+
+                RuntimeException(
                     "Error while parsing message at file position ${buffer.position()}: ${e.message}",
                     e
                 )
@@ -59,7 +71,8 @@ private class DltMessageIterator(val buffer: BinaryInputStream, val totalSize: L
                 progressText = "Parsing file",
                 errorCount = errorCount,
                 successCount = successCount,
-                dltMessage = message
+                dltMessage = result as? DltMessage,
+                error = result as? Exception,
             )
         }
         throw RuntimeException("No more data available, but next() was called on iterator")
