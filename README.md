@@ -14,8 +14,8 @@ Add `io.github.froks:dlt-core:<version>` to your dependencies - see [mavencentra
 Code:
 ```kotlin
 DltMessageParser.parseFile(Path.of("file.dlt")).forEach { 
-    val msg = it.dltMessage as DltMessageV1
-    if (msg.extendedHeader?.apIdText != "MYAP") {
+    val msg = it.dltMessage as? DltMessageV1
+    if (msg?.extendedHeader?.apIdText != "MYAP") {
         return@forEach
     }
     // do stuff with msg

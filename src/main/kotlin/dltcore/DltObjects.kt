@@ -27,16 +27,38 @@ public enum class DltStorageVersion(public val magicValue: Int) {
     }
 }
 
+public interface DltStorageHeader {
+    public val utcTimestamp: Instant
+    public val ecuIdText: String
+}
+
+public interface DltStandardHeader {
+
+}
+
+public interface DltExtendedHeader {
+    public val apIdText: String
+    public val ctIdText: String
+}
+
+public interface DltPayload {
+    public val logMessage: String
+}
+
 public interface DltMessage {
     public fun getVersion(): DltStorageVersion
     public fun write(bb: BinaryOutputStream)
+    public val storageHeader: DltStorageHeader
+    public val standardHeader: DltStandardHeader?
+    public val extendedHeader: DltExtendedHeader?
+    public val payload: DltPayload
 }
 
 public class DltMessageV1(
-    public val storageHeader: DltStorageHeaderV1,
-    public val standardHeader: DltStandardHeaderV1,
-    public val extendedHeader: DltExtendedHeaderV1?,
-    public val payload: DltPayload,
+    public override val storageHeader: DltStorageHeaderV1,
+    public override val standardHeader: DltStandardHeaderV1,
+    public override val extendedHeader: DltExtendedHeaderV1?,
+    public override val payload: DltPayloadV1,
 ) : DltMessage {
     override fun getVersion(): DltStorageVersion =
         DltStorageVersion.V1
@@ -63,7 +85,7 @@ public class DltMessageV1(
                     null
             val payloadLength =
                 standardHeader.len.toInt() - standardHeader.totalLength - (extendedHeader?.totalLength ?: 0)
-            val payload = DltPayload.read(
+            val payload = DltPayloadV1.read(
                 bis,
                 payloadLength,
                 standardHeader.mostSignificantByteFirst,
@@ -78,8 +100,8 @@ public class DltStorageHeaderV1(
     public val timestampEpochSeconds: Long, // 4 unsigned byte in V1
     public val timestampMicroseconds: Int, // microseconds in V1, Nanoseconds in V2
     public val ecuId: Int, // 4 chars
-) {
-    public val ecuIdText: String
+) : DltStorageHeader {
+    public override val ecuIdText: String
         get() = ecuId.asStringValue()
 
     public fun write(bb: BinaryOutputStream) {
@@ -92,7 +114,7 @@ public class DltStorageHeaderV1(
         bb.writeInt(ecuId)
     }
 
-    public val utcTimestamp: Instant by lazy {
+    public override val utcTimestamp: Instant by lazy {
         Instant.ofEpochSecond(timestampEpochSeconds, timestampMicroseconds.microseconds.inWholeNanoseconds)
     }
 
@@ -116,7 +138,7 @@ public class DltStandardHeaderV1(
     public val ecuId: Int?,
     public val sessionId: Int?,
     public val timestamp: UInt?,
-) {
+) : DltStandardHeader {
     public fun write(bb: BinaryOutputStream) {
         // The Standard Header and the Extended Header shall be in big endian format (MSB first).
         bb.order(ByteOrder.BIG_ENDIAN)
@@ -247,7 +269,7 @@ public class DltExtendedHeaderV1(
     public val noar: Byte, // number of arguments
     public val apid: Int, // application id
     public val ctid: Int, // context id
-) {
+) : DltExtendedHeader {
     public fun write(bb: BinaryOutputStream) {
         bb.order(ByteOrder.BIG_ENDIAN)
 
@@ -269,10 +291,10 @@ public class DltExtendedHeaderV1(
             (msin and MESSAGEINFO_MTIN).toInt() shr 4
         )
 
-    public val apIdText: String
+    public override val apIdText: String
         get() = this.apid.asStringValue()
 
-    public val ctIdText: String
+    public override val ctIdText: String
         get() = this.ctid.asStringValue()
 
     public val totalLength: Int =
@@ -296,14 +318,14 @@ public class DltExtendedHeaderV1(
     }
 }
 
-public class DltPayload(
+public class DltPayloadV1(
     public val data: ByteArray,
     private val mostSignificantByteFirst: Boolean,
     private val extendedHeader: DltExtendedHeaderV1?
-) {
+) : DltPayload {
     private val byteOrder = if (mostSignificantByteFirst) ByteOrder.BIG_ENDIAN else ByteOrder.LITTLE_ENDIAN
 
-    public val logMessage: String by lazy {
+    public override val logMessage: String by lazy {
         val bb = BinaryInputStream.wrap(data)
         bb.order(byteOrder)
 
@@ -342,9 +364,9 @@ public class DltPayload(
             len: Int,
             mostSignificantByteFirst: Boolean,
             extendedHeader: DltExtendedHeaderV1?
-        ): DltPayload {
+        ): DltPayloadV1 {
             val data = bis.readArray(len)
-            return DltPayload(data, mostSignificantByteFirst, extendedHeader)
+            return DltPayloadV1(data, mostSignificantByteFirst, extendedHeader)
         }
     }
 }
@@ -430,7 +452,7 @@ public abstract class DltPayloadArgument(
                     byteOrder
                 )
 
-                else -> throw IllegalArgumentException("arg type is $argType")
+                else -> throw IllegalArgumentException("arg type $argType is not supported (yet)")
             }
         }
     }
