@@ -1,6 +1,9 @@
 package dltcore
 
-public fun String.asIntValue(): Int {
+public typealias IdInt = Int
+public typealias IdString = String
+
+public fun IdString.asIntValue(): Int {
     if (this.length > 4) {
         throw IllegalArgumentException("AppId '$this' may not be longer than 4 bytes")
     }
@@ -13,7 +16,7 @@ public fun String.asIntValue(): Int {
     return value
 }
 
-public fun Int.asStringValue(): String =
+public fun IdInt.asStringValue(): String =
     String(
         byteArrayOf(
             if (this and 0xFF000000.toInt() == 0) ' '.code.toByte() else (this and 0xFF000000.toInt() shr 24).toByte(),

@@ -99,7 +99,7 @@ public class DltMessageV1(
 public class DltStorageHeaderV1(
     public val timestampEpochSeconds: Long, // 4 unsigned byte in V1
     public val timestampMicroseconds: Int, // microseconds in V1, Nanoseconds in V2
-    public val ecuId: Int, // 4 chars
+    public val ecuId: IdInt, // 4 chars
 ) : DltStorageHeader {
     public override val ecuIdText: String
         get() = ecuId.asStringValue()
@@ -267,8 +267,8 @@ public enum class MessageTypeInfo(public val type: MessageType, public val value
 public class DltExtendedHeaderV1(
     public val msin: Byte, // message info
     public val noar: Byte, // number of arguments
-    public val apid: Int, // application id
-    public val ctid: Int, // context id
+    public val apid: IdInt, // application id
+    public val ctid: IdInt, // context id
 ) : DltExtendedHeader {
     public fun write(bb: BinaryOutputStream) {
         bb.order(ByteOrder.BIG_ENDIAN)
@@ -354,7 +354,7 @@ public class DltPayloadV1(
     public fun write(bb: BinaryOutputStream) {
         bb.order(byteOrder)
 
-        bb.put(data)
+        bb.writeArray(data)
     }
 
 
@@ -608,7 +608,6 @@ public class DltPayloadArgumentNumber(
         }
     }
 
-    override fun toString(): String {
-        return number.toString()
-    }
+    override fun toString(): String =
+        number.toString()
 }

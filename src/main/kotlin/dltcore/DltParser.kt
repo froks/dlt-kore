@@ -3,6 +3,7 @@ package dltcore
 import library.BinaryInputStream
 import library.ByteOrder
 import library.LargeFileByteBufferInputStream
+import library.ParseException
 import java.nio.file.Path
 import kotlin.io.path.fileSize
 
@@ -18,7 +19,10 @@ public data class DltReadStatus(
     val error: Exception?,
 )
 
-private class DltMessageIterator(val buffer: BinaryInputStream, val totalSize: Long?) : Iterator<DltReadStatus> {
+private class DltMessageIterator(
+    private val buffer: BinaryInputStream,
+    private val totalSize: Long?
+) : Iterator<DltReadStatus> {
     private var index: Long = 0
     private var successCount: Long = 0
     private var errorCount: Long = 0
@@ -48,16 +52,18 @@ private class DltMessageIterator(val buffer: BinaryInputStream, val totalSize: L
             val result = try {
                 val magic = findFirstValidMagic()
                 val version = DltStorageVersion.getByMagic(magic)
-                parseDltMessage(buffer, version)
-            } catch (e: RuntimeException) {
+                val msg = parseDltMessage(buffer, version)
+                successCount++
+                msg
+            } catch (e: Exception) {
                 errorCount++
 
-                RuntimeException(
+                ParseException(
+                    buffer.position(),
                     "Error while parsing message at file position ${buffer.position()}: ${e.message}",
                     e
                 )
             }
-            successCount++
             val progress = if (totalSize != null) {
                 buffer.position().toFloat() / totalSize.toFloat()
             } else {
@@ -75,7 +81,7 @@ private class DltMessageIterator(val buffer: BinaryInputStream, val totalSize: L
                 error = result as? Exception,
             )
         }
-        throw RuntimeException("No more data available, but next() was called on iterator")
+        throw IllegalStateException("No more data available, but next() was called on iterator")
     }
 }
 

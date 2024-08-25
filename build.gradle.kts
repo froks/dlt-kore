@@ -10,7 +10,7 @@ plugins {
 }
 
 group = "io.github.froks"
-version = "0.2.1"
+version = "0.2.2"
 
 repositories {
     mavenLocal()
@@ -19,6 +19,7 @@ repositories {
 
 dependencies {
     testImplementation("org.jetbrains.kotlin:kotlin-test")
+    testImplementation("com.willowtreeapps.assertk:assertk:0.28.1")
 }
 
 kotlin {
