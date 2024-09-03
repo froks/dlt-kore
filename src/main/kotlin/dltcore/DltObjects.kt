@@ -5,8 +5,12 @@ import library.BinaryOutputStream
 import library.ByteOrder
 import java.nio.charset.Charset
 import java.time.Instant
+import java.util.logging.Logger
 import kotlin.experimental.and
 import kotlin.time.Duration.Companion.microseconds
+
+private val logger = Logger.getLogger("Parsing")
+private var strictMode = false
 
 public enum class DltStorageVersion(public val magicValue: Int) {
     V1(0x444c5401),  // "DLT+0x01"
@@ -412,6 +416,10 @@ public abstract class DltPayloadArgument(
         public fun getVariableName(typeInfo: Int, bb: BinaryInputStream): String? {
             if (typeInfo and TYPEINFO_VARI > 0) {
                 val len = bb.readShort().toUShort().toInt()
+                if (len == 0) {
+                    // Weird?
+                    return ""
+                }
                 val nameArray = bb.readArray(len)
                 return String(nameArray, 0, len - 1, Charsets.US_ASCII)
             }
@@ -469,7 +477,10 @@ public class DltPayloadArgumentBool(
             val variableName = getVariableName(typeInfo, bb)
             val lenInfo = typeInfo and TYPEINFO_MASK_TYLE
             if (lenInfo != 1) {
-                throw UnsupportedOperationException("Unsupported length info $lenInfo")
+                logger.warning("Unsupported length info $lenInfo for Bool argument")
+                if (strictMode) {
+                    throw UnsupportedOperationException("Unsupported length info $lenInfo for Bool argument")
+                }
             }
             return DltPayloadArgumentBool(bb.readByte() != 0x0.toByte(), variableName)
         }
