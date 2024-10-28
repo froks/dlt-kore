@@ -8,8 +8,8 @@ import kotlin.math.min
 
 private const val OVERLAP = 10_000_000
 
-internal class LargeFileByteBufferInputStream(path: Path) : BinaryInputStream {
-    private lateinit var currentInputStream: BinaryInputStream
+public class LargeFileMemoryMappedByteBufferInputStream(path: Path) : BinaryInputStream {
+    private lateinit var currentInputStream: ByteBufferBinaryInputStream
 
     private val fileSize = path.fileSize()
     private var fileChannel: FileChannel = FileChannel.open(path, StandardOpenOption.READ)
@@ -37,6 +37,7 @@ internal class LargeFileByteBufferInputStream(path: Path) : BinaryInputStream {
                     absolutePosition,
                     min(fileSize - absolutePosition, Integer.MAX_VALUE.toLong())
                 )
+                currentInputStream.close()
                 currentInputStream = ByteBufferBinaryInputStream(buffer)
             }
             return currentInputStream
@@ -71,4 +72,9 @@ internal class LargeFileByteBufferInputStream(path: Path) : BinaryInputStream {
 
     override fun readArray(len: Int): ByteArray =
         buffer.readArray(len)
+
+    override fun close() {
+        buffer.close()
+        fileChannel.close()
+    }
 }

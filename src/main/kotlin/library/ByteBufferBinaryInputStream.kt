@@ -30,4 +30,7 @@ public class ByteBufferBinaryInputStream(private val buffer: ByteBuffer) : Binar
         buffer.get(data)
         return data
     }
+
+    override fun close() {
+    }
 }

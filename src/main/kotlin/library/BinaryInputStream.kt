@@ -2,7 +2,7 @@ package library
 
 import java.nio.ByteBuffer
 
-public interface BinaryInputStream {
+public interface BinaryInputStream : AutoCloseable {
     public fun order(order: ByteOrder)
     public fun hasRemaining(): Boolean
     public fun position(): Long

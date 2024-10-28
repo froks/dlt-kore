@@ -1,6 +1,6 @@
 package library
 
-public interface BinaryOutputStream {
+public interface BinaryOutputStream : AutoCloseable {
     public fun order(order: ByteOrder)
 
     public fun writeByte(value: Byte)

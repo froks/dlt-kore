@@ -36,4 +36,7 @@ public class ByteBufferBinaryOutputStream(private val buffer: ByteBuffer) : Bina
 
     override fun position(): Long =
         position
+
+    override fun close() {
+    }
 }

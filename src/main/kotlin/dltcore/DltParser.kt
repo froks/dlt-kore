@@ -2,7 +2,8 @@ package dltcore
 
 import library.BinaryInputStream
 import library.ByteOrder
-import library.LargeFileByteBufferInputStream
+import library.LargeFileWindowedByteBufferInputStream
+import library.LargeFileMemoryMappedByteBufferInputStream
 import library.ParseException
 import java.nio.file.Path
 import kotlin.io.path.fileSize
@@ -43,8 +44,13 @@ private class DltMessageIterator(
             DltStorageVersion.V2 -> throw UnsupportedOperationException("not supported yet")
         }
 
-    override fun hasNext(): Boolean =
-        buffer.hasRemaining()
+    override fun hasNext(): Boolean {
+        val hasNext = buffer.hasRemaining()
+        if (!hasNext) {
+            buffer.close()
+        }
+        return hasNext
+    }
 
     override fun next(): DltReadStatus {
         buffer.order(ByteOrder.BIG_ENDIAN)
@@ -88,10 +94,17 @@ private class DltMessageIterator(
 public class DltMessageParser private constructor() {
 
     public companion object {
+        private fun isWindows() =
+            System.getProperty("os.name", "unknown").contains("windows", true)
+
         public fun parseBuffer(buffer: BinaryInputStream, totalSize: Long?): Sequence<DltReadStatus> =
             DltMessageIterator(buffer, totalSize).asSequence()
+
         public fun parseFile(path: Path): Sequence<DltReadStatus> {
-            val bis = LargeFileByteBufferInputStream(path)
+            val bis = if (isWindows()) // Windows memory mapped io keeps the file locked
+                LargeFileWindowedByteBufferInputStream(path)
+            else
+                LargeFileMemoryMappedByteBufferInputStream(path)
             return parseBuffer(bis, path.fileSize())
         }
 
