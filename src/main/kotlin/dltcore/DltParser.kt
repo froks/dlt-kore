@@ -100,8 +100,8 @@ public class DltMessageParser private constructor() {
         public fun parseBuffer(buffer: BinaryInputStream, totalSize: Long?): Sequence<DltReadStatus> =
             DltMessageIterator(buffer, totalSize).asSequence()
 
-        public fun parseFile(path: Path): Sequence<DltReadStatus> {
-            val bis = if (isWindows()) // Windows memory mapped io keeps the file locked
+        public fun parseFile(path: Path, useWindowedInputStream: Boolean = isWindows()): Sequence<DltReadStatus> {
+            val bis = if (useWindowedInputStream) // Windows memory mapped io keeps the file locked
                 LargeFileWindowedByteBufferInputStream(path)
             else
                 LargeFileMemoryMappedByteBufferInputStream(path)

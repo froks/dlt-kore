@@ -21,7 +21,7 @@ public class LargeFileWindowedByteBufferInputStream(path: Path) : BinaryInputStr
         get() {
             if (absolutePosition == -1L) {
                 absolutePosition = 0
-                val buffer = ByteBuffer.allocate(BUFFER_SIZE)
+                val buffer = ByteBuffer.allocate(min(BUFFER_SIZE.toLong(), fileSize).toInt())
                 fileChannel.read(buffer, absolutePosition)
                 buffer.position(0)
                 currentInputStream = ByteBufferBinaryInputStream(buffer)
