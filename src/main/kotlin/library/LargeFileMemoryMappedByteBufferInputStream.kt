@@ -15,6 +15,7 @@ public class LargeFileMemoryMappedByteBufferInputStream(path: Path) : BinaryInpu
     private var fileChannel: FileChannel = FileChannel.open(path, StandardOpenOption.READ)
     private var absolutePosition = -1L
     private var bufferIndex = 0
+    private var markedPosition = -1L
 
     private val buffer: BinaryInputStream
         get() {
@@ -73,7 +74,34 @@ public class LargeFileMemoryMappedByteBufferInputStream(path: Path) : BinaryInpu
     override fun readArray(len: Int): ByteArray =
         buffer.readArray(len)
 
+    override fun mark() {
+        markedPosition = absolutePosition + currentInputStream.position()
+        buffer.mark()
+    }
+
+    override fun reset() {
+        if (markedPosition == -1L) {
+            return
+        }
+        if (markedPosition < absolutePosition) {
+            // If we've read another chunk between the last mark and reset, remap a chunk starting
+            // from the marked position. This should almost never happen, since reset's only get called
+            // when a message parsing fails
+            absolutePosition = markedPosition
+            val buffer = fileChannel.map(
+                FileChannel.MapMode.READ_ONLY,
+                absolutePosition,
+                min(fileSize - absolutePosition, Integer.MAX_VALUE.toLong())
+            )
+            currentInputStream = ByteBufferBinaryInputStream(buffer)
+        } else {
+            buffer.reset()
+        }
+        markedPosition = -1
+    }
+
     override fun close() {
+        markedPosition = -1
         buffer.close()
         fileChannel.close()
     }

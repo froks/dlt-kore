@@ -57,6 +57,7 @@ private class DltMessageIterator(
         if (buffer.hasRemaining()) {
             val result = try {
                 val magic = findFirstValidMagic()
+                buffer.mark()
                 val version = DltStorageVersion.getByMagic(magic)
                 val msg = parseDltMessage(buffer, version)
                 successCount++
@@ -64,6 +65,11 @@ private class DltMessageIterator(
             } catch (e: Exception) {
                 errorCount++
 
+                try {
+                    buffer.reset()
+                } catch (_: Exception) {
+                    // ignore
+                }
                 ParseException(
                     buffer.position(),
                     "Error while parsing message at file position ${buffer.position()}: ${e.message}",

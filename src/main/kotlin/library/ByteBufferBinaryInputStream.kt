@@ -31,6 +31,14 @@ public class ByteBufferBinaryInputStream(private val buffer: ByteBuffer) : Binar
         return data
     }
 
+    override fun mark() {
+        buffer.mark()
+    }
+
+    override fun reset() {
+        buffer.reset()
+    }
+
     override fun close() {
     }
 }
